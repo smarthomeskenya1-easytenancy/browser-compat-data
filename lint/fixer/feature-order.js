@@ -6,6 +6,21 @@ import compareFeatures from '../../scripts/lib/compare-features.js';
 /** @import {InternalIdentifier} from '../../types/index.js' */
 
 /**
+ * Check whether an object contains compat data anywhere in its subtree.
+ * @param {object} obj - The object to check
+ * @returns {boolean}
+ */
+const hasCompatData = (obj) => {
+  if (!obj || typeof obj !== 'object') {
+    return false;
+  }
+  if ('__compat' in obj) {
+    return true;
+  }
+  return Object.values(obj).some(hasCompatData);
+};
+
+/**
  * Return a new feature object whose first-level properties have been
  * ordered according to Array.prototype.sort, and so will be
  * stringified in that order as well. This relies on guaranteed "own"
@@ -16,21 +31,12 @@ import compareFeatures from '../../scripts/lib/compare-features.js';
  * @returns {InternalIdentifier} The new value
  */
 export const orderFeatures = (_, value) => {
-  if (value instanceof Object && '__compat' in value) {
-    value = Object.keys(value)
-      .sort(compareFeatures)
-      .reduce(
-        /**
-         * @param {InternalIdentifier} result
-         * @param {string} key
-         * @returns {InternalIdentifier}
-         */
-        (result, key) => {
-          result[key] = value[key];
-          return result;
-        },
-        /** @type {InternalIdentifier} */ ({}),
-      );
+  if (value instanceof Object && hasCompatData(value)) {
+    value = /** @type {InternalIdentifier} */ (
+      Object.fromEntries(
+        Object.entries(value).sort(([a], [b]) => compareFeatures(a, b)),
+      )
+    );
   }
   return value;
 };
