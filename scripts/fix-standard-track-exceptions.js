@@ -157,21 +157,27 @@ const guessSpecShortname = (specUrl, specMap) => {
  * Fetch spec URL suggestions from the respec xref API.
  * @param {string} featurePath Dot-separated feature path
  * @param {string | string[] | undefined} ancestorSpecUrl Ancestor spec_url for spec filtering
+ * @param {string} [overrideTerm] Custom search term; skips for/spec filtering when set
  * @returns {Promise<string[]>}
  */
-const fetchXrefSuggestions = async (featurePath, ancestorSpecUrl) => {
+const fetchXrefSuggestions = async (
+  featurePath,
+  ancestorSpecUrl,
+  overrideTerm,
+) => {
   const parts = featurePath.split('.');
-  const term = parts[parts.length - 1];
   /** @type {{ term: string; for?: string; specs?: string[] }} */
-  const xrefQuery = { term };
-  if (parts[0] === 'api' && parts.length >= 3) {
-    xrefQuery.for = parts[parts.length - 2];
-  }
-  if (ancestorSpecUrl) {
-    const specMap = await loadXrefSpecMap();
-    const shortname = guessSpecShortname(ancestorSpecUrl, specMap);
-    if (shortname) {
-      xrefQuery.specs = [shortname];
+  const xrefQuery = { term: overrideTerm ?? parts[parts.length - 1] };
+  if (!overrideTerm) {
+    if (parts[0] === 'api' && parts.length >= 3) {
+      xrefQuery.for = parts[parts.length - 2];
+    }
+    if (ancestorSpecUrl) {
+      const specMap = await loadXrefSpecMap();
+      const shortname = guessSpecShortname(ancestorSpecUrl, specMap);
+      if (shortname) {
+        xrefQuery.specs = [shortname];
+      }
     }
   }
   try {
@@ -199,7 +205,8 @@ const instructions = `
   ${styleText('bold', 'Actions:')}
     ${styleText('cyan', 'https://...')}  Add the URL as spec_url (comma-separated for multiple)
     ${styleText('cyan', '1-9')}          Accept a numbered suggestion
-    ${styleText('cyan', 'x')}            Fetch suggestions from respec xref
+    ${styleText('cyan', 'x')}            Fetch xref suggestions for the current feature
+    ${styleText('cyan', 'x <term>')}     Fetch xref suggestions for a custom search term
     ${styleText('cyan', 'p')}            Use parent feature's spec_url
     ${styleText('cyan', 'p=https://...')} Set spec_url on parent + this subfeature
     ${styleText('cyan', 'f')}            Set standard_track to false (+ all subfeatures)
@@ -251,7 +258,7 @@ const rl = readline.createInterface({
   output: process.stdout,
 });
 
-const prompt = `  ${styleText('dim', 'URL, 1-9 (suggestion), x (xref), p, f, /skip-to, or ?')}
+const prompt = `  ${styleText('dim', 'URL, 1-9 (suggestion), x [term] (xref), p, f, /skip-to, or ?')}
   > `;
 
 /** Save progress and exit */
@@ -404,11 +411,15 @@ while (idx < exceptions.length) {
       continue;
     }
 
-    if (answer === 'x') {
+    if (answer === 'x' || answer.startsWith('x ')) {
+      const overrideTerm = answer.startsWith('x ')
+        ? answer.slice(2).trim()
+        : undefined;
       console.log(styleText('dim', '  Fetching xref suggestions…'));
       const xrefUrls = await fetchXrefSuggestions(
         featurePath,
         ancestor?.spec_url,
+        overrideTerm,
       );
       const newUrls = xrefUrls.filter((u) => !suggestions.includes(u));
       if (newUrls.length === 0) {
