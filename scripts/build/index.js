@@ -98,7 +98,15 @@ export const applyMirroring = (feature) => {
 const getPreviousVersion = (browser, version) => {
   if (typeof version === 'string' && !version.startsWith('≤')) {
     const browserVersions = Object.keys(bcd.browsers[browser].releases).sort(
-      compareVersions,
+      (a, b) => {
+        if (a === 'preview') {
+          return 1;
+        }
+        if (b === 'preview') {
+          return -1;
+        }
+        return compareVersions(a, b);
+      },
     );
     const currentVersionIndex = browserVersions.indexOf(version);
     if (currentVersionIndex > 0) {
